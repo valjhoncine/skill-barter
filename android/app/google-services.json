@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "666151062014",
+    "project_id": "skillbater",
+    "storage_bucket": "skillbater.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:666151062014:android:58c492948759f0ec4498af",
+        "android_client_info": {
+          "package_name": "com.example.skillbater"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfnKuXaB3qmRyJL3JCx9McMkrz6RV6qp0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
