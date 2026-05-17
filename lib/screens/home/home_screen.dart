@@ -146,8 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final posts = snapshot.data!.docs.where((doc) {
-          return doc['owner_id'] != AuthService.uid &&
-              doc['status'] == 'active';
+          return doc['owner_id'] != AuthService.uid && doc['status'] == 'open';
         }).toList();
 
         if (posts.isEmpty) {
@@ -276,10 +275,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ChatScreen()),
-                ),
+                onPressed: () async {
+                  final postId = post['id'];
+                  final ownerId = post['owner_id'];
+
+                  final requesterId = AuthService.uid;
+
+                  final requestRef = await FirebaseFirestore.instance
+                      .collection('post_requests')
+                      .add({
+                        'post_id': postId,
+                        'post_title': post['title'],
+                        'post_name': post['name'],
+                        'post_owner_id': ownerId,
+                        'post_owner_status': 'pending',
+                        'requester_id': requesterId,
+                        'requester_status': 'pending',
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+
+                  await FirebaseFirestore.instance.collection('chats').add({
+                    'post_id': postId,
+                    'request_id': requestRef.id,
+                    'participants': [ownerId, requesterId],
+                    'last_message': '',
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+                  if (!mounted) {
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ChatScreen()),
+                  );
+                },
                 child: const Text(
                   'Request',
                   style: TextStyle(

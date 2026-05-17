@@ -57,6 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             'title': '',
             'description': '',
             'skills': [],
+            'location': '',
             'createdAt': Timestamp.now(),
           });
       if (!mounted) {

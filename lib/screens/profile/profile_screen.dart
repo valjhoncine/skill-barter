@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:skillbarter/models/services/auth_services.dart';
+import 'package:skillbarter/models/services/post_service.dart';
 import 'package:skillbarter/screens/auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -10,6 +13,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final PostService _postService = PostService();
+  final AuthService _authService = AuthService();
+
   Future<void> logout() async {
     await FirebaseAuth.instance.signOut();
 
@@ -19,21 +25,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(builder: (_) => LoginScreen()),
     );
   }
-
-  final List<Map<String, dynamic>> _myPosts = const [
-    {
-      'title': 'Flutter App Development',
-      'category': 'Coding',
-      'wants': 'Graphic Design',
-      'requests': 3,
-    },
-    {
-      'title': 'UI/UX Consultation',
-      'category': 'Design',
-      'wants': 'Photography',
-      'requests': 1,
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +51,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildProfileHeader(),
+            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: _authService.getUserStream(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF4CAF72)),
+                  );
+                }
+
+                final userData = snapshot.data!.data();
+
+                final name = userData?['name'] ?? 'No Name';
+                final title = userData?['title'] ?? '';
+                final location = userData?['location'] ?? '';
+                final description = userData?['description'] ?? '';
+
+                return _buildProfileHeader(
+                  name: name,
+                  title: title,
+                  location: location,
+                  description: description,
+                );
+              },
+            ),
             _buildStatsRow(),
             _buildSkillTags(),
             _buildMyPosts(),
@@ -70,7 +84,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader({
+    required String name,
+    required String title,
+    required String location,
+    required String description,
+  }) {
     return Container(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -109,8 +128,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Joshua Villafuerte',
+          Text(
+            name,
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -118,13 +137,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Full Stack Software Engineer | Backend Developer | C# | .Net Core | DevOps',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6AAD7A)),
-          ),
+          Text(title, style: TextStyle(fontSize: 13, color: Color(0xFF6AAD7A))),
           const SizedBox(height: 8),
-          const Text(
-            'Parañaque City, Manila📍',
+          Text(
+            '$location 📍',
             style: TextStyle(fontSize: 12, color: Color(0xFFA3C4A8)),
           ),
           const SizedBox(height: 16),
@@ -134,9 +150,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: const Color(0xFF2D5A3D),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text(
-              'Passionate about building apps and exchanging skills with the community. '
-              'Let\'s grow together! 🌱',
+            child: Text(
+              description,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: Color(0xFFA3C4A8)),
             ),
@@ -157,7 +172,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStat('2', 'Posts'),
+          StreamBuilder<QuerySnapshot>(
+            stream: _postService.getPosts(),
+            builder: (context, snapshot) {
+              final docs = snapshot.data?.docs ?? [];
+
+              final postCount = docs
+                  .where((doc) => doc['owner_id'] == AuthService.uid)
+                  .length;
+
+              return _buildStat(postCount.toString(), 'Posts');
+            },
+          ),
           _buildDivider(),
           _buildStat('4', 'Exchanges'),
           _buildDivider(),
@@ -253,66 +279,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          ..._myPosts.map(
-            (post) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D5A3D),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post['title'],
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Wants: ${post['wants']}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF6AAD7A),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${post['requests']} requests',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFFA3C4A8),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
+          StreamBuilder<QuerySnapshot>(
+            stream: _postService.getPosts(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Text(
+                  'Failed to load posts',
+                  style: TextStyle(color: Colors.white),
+                );
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF4CAF72)),
+                );
+              }
+
+              final docs = snapshot.data!.docs.where((doc) {
+                return doc['owner_id'] == AuthService.uid;
+              }).toList();
+
+              if (docs.isEmpty) {
+                return const Text(
+                  'No posts yet',
+                  style: TextStyle(color: Color(0xFFA3C4A8)),
+                );
+              }
+
+              return Column(
+                children: docs.map((doc) {
+                  final post = doc.data() as Map<String, dynamic>;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1B3A2D),
-                      borderRadius: BorderRadius.circular(8),
+                      color: const Color(0xFF2D5A3D),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Text(
-                      post['category'],
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF4CAF72),
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post['title'],
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Wants: ${post['wants']}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF6AAD7A),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B3A2D),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            post['category'],
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF4CAF72),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ),
+                  );
+                }).toList(),
+              );
+            },
           ),
           const SizedBox(height: 20),
           SizedBox(
