@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:skillbarter/models/services/auth_services.dart';
+import 'package:skillbarter/models/services/common_helper.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -8,41 +11,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final List<Map<String, dynamic>> _conversations = [
-    {
-      'name': 'Jin Mai Zhao',
-      'initials': 'JM',
-      'lastMessage': 'Sure! I can help you with Figma.',
-      'time': '2:30 PM',
-      'unread': 2,
-      'status': 'Barter Agreed ✅',
-    },
-    {
-      'name': 'Linghe Zhang',
-      'initials': 'LZ',
-      'lastMessage': 'When are you available for lessons?',
-      'time': '11:00 AM',
-      'unread': 0,
-      'status': 'Pending',
-    },
-    {
-      'name': 'Xifan Shen',
-      'initials': 'XS',
-      'lastMessage': 'I sent you the portfolio link!',
-      'time': 'Yesterday',
-      'unread': 1,
-      'status': 'Barter Agreed ✅',
-    },
-    {
-      'name': 'Lusi Zhao',
-      'initials': 'LZ',
-      'lastMessage': 'Can we exchange our skills?',
-      'time': 'Yesterday',
-      'unread': 0,
-      'status': 'Pending',
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -54,25 +22,101 @@ class _ChatScreenState extends State<ChatScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Messages',
-          style: TextStyle(color: Colors.white,
-            fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Messages',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _conversations.length,
-        itemBuilder: (_, i) => _buildConversationCard(_conversations[i]),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('chats')
+            .where('participants', arrayContains: AuthService.uid)
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(
+              child: Text(
+                'Something went wrong',
+                style: TextStyle(color: Colors.white),
+              ),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF4CAF72)),
+            );
+          }
+
+          final chats = snapshot.data!.docs;
+
+          if (chats.isEmpty) {
+            return const Center(
+              child: Text(
+                'No conversations yet',
+                style: TextStyle(color: Colors.white),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: chats.length,
+            itemBuilder: (_, i) {
+              final chat = chats[i].data() as Map<String, dynamic>;
+              final chatId = chats[i].id;
+
+              final participants = List<String>.from(chat['participants']);
+              final otherUserId = participants.firstWhere(
+                (id) => id != AuthService.uid,
+              );
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(otherUserId)
+                    .get(),
+                builder: (context, userSnap) {
+                  if (!userSnap.hasData) {
+                    return const SizedBox();
+                  }
+
+                  final user = userSnap.data!.data() as Map<String, dynamic>;
+
+                  final convo = {
+                    'name': user['name'] ?? 'Unknown',
+                    'initials': CommonHelper.getInitials(user['name'] ?? 'U'),
+                    'lastMessage': chat['last_message'] ?? '',
+                    'time': 'Now',
+                    'unread': 0,
+                    'status': 'Active',
+                    'title': chat['post_title'] ?? '',
+                  };
+
+                  return _buildConversationCard(convo, chatId);
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildConversationCard(Map<String, dynamic> convo) {
+  Widget _buildConversationCard(Map<String, dynamic> convo, String chatId) {
     return GestureDetector(
-      onTap: () => Navigator.push(context,
-        MaterialPageRoute(builder: (_) =>
-          ChatDetailScreen(name: convo['name'],
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            chatId: chatId,
+            name: convo['name'],
             initials: convo['initials'],
-            status: convo['status']))),
+            status: convo['status'],
+          ),
+        ),
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
@@ -80,91 +124,123 @@ class _ChatScreenState extends State<ChatScreen> {
           color: const Color(0xFF2D5A3D),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Row(children: [
-          Stack(children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: const Color(0xFF4CAF72),
-              child: Text(convo['initials'],
-                style: const TextStyle(fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B3A2D))),
-            ),
-            if (convo['unread'] > 0)
-              Positioned(
-                right: 0, top: 0,
-                child: Container(
-                  width: 16, height: 16,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF4CAF72),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text('${convo['unread']}',
-                      style: const TextStyle(fontSize: 9,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ),
-          ]),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          children: [
+            Stack(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(convo['name'],
-                      style: const TextStyle(fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-                    Text(convo['time'],
-                      style: const TextStyle(fontSize: 11,
-                        color: Color(0xFF6AAD7A))),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(convo['lastMessage'],
-                  style: const TextStyle(fontSize: 12,
-                    color: Color(0xFFA3C4A8)),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: convo['status'].contains('✅')
-                      ? const Color(0xFF1B3A2D)
-                      : const Color(0xFF1B3A2D),
-                    borderRadius: BorderRadius.circular(6),
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: const Color(0xFF4CAF72),
+                  child: Text(
+                    convo['initials'],
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B3A2D),
+                    ),
                   ),
-                  child: Text(convo['status'],
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: convo['status'].contains('✅')
-                        ? const Color(0xFF4CAF72)
-                        : const Color(0xFF6AAD7A),
-                    )),
                 ),
+                if (convo['unread'] > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF4CAF72),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${convo['unread']}',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
-          ),
-        ]),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${convo["title"]} - ${convo["name"]}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        convo['time'],
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6AAD7A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    convo['lastMessage'],
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFA3C4A8),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: convo['status'].contains('✅')
+                          ? const Color(0xFF1B3A2D)
+                          : const Color(0xFF1B3A2D),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      convo['status'],
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: convo['status'].contains('✅')
+                            ? const Color(0xFF4CAF72)
+                            : const Color(0xFF6AAD7A),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class ChatDetailScreen extends StatefulWidget {
+  final String chatId;
   final String name;
   final String initials;
   final String status;
 
   const ChatDetailScreen({
     super.key,
+    required this.chatId,
     required this.name,
     required this.initials,
     required this.status,
@@ -176,14 +252,6 @@ class ChatDetailScreen extends StatefulWidget {
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [
-    {'text': 'Hi! I saw your skill post.', 'isMe': false},
-    {'text': 'Hey! Yes, I offer Figma design sessions.', 'isMe': true},
-    {'text': 'I can help with coding in exchange!', 'isMe': false},
-    {'text': 'That sounds great! Let\'s do it!', 'isMe': true},
-    {'text': 'Sure! I can help you with Figma.', 'isMe': false},
-  ];
-
   bool _barterAgreed = false;
 
   @override
@@ -197,157 +265,236 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Row(children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFF4CAF72),
-            child: Text(widget.initials,
-              style: const TextStyle(fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1B3A2D))),
-          ),
-          const SizedBox(width: 10),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.name,
-              style: const TextStyle(fontSize: 14,
-                color: Colors.white,
-                fontWeight: FontWeight.bold)),
-            Text(widget.status,
-              style: const TextStyle(fontSize: 10,
-                color: Color(0xFF4CAF72))),
-          ]),
-        ]),
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: const Color(0xFF4CAF72),
+              child: Text(
+                widget.initials,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1B3A2D),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  widget.status,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF4CAF72),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      body: Column(children: [
-        if (!_barterAgreed)
+      body: Column(
+        children: [
+          if (!_barterAgreed)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D5A3D),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Send a Barter Request?',
+                    style: TextStyle(fontSize: 13, color: Colors.white),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF72),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () => setState(() => _barterAgreed = true),
+                    child: const Text(
+                      'Send Request',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B3A2D),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (_barterAgreed)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D5A3D),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF4CAF72), size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'Barter Agreed! 🎉',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF4CAF72),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('messages')
+                  .where('chat_id', isEqualTo: widget.chatId)
+                  .orderBy('createdAt')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF4CAF72)),
+                  );
+                }
+
+                final messages = snapshot.data!.docs;
+
+                if (messages.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No messages yet',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: messages.length,
+                  itemBuilder: (_, i) {
+                    final msg = messages[i].data() as Map<String, dynamic>;
+
+                    return _buildMessage({
+                      'text': msg['text'],
+                      'isMe': msg['sender_id'] == AuthService.uid,
+                    });
+                  },
+                );
+              },
+            ),
+          ),
           Container(
-            margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D5A3D),
-              borderRadius: BorderRadius.circular(12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF2D5A3D),
+              border: Border(top: BorderSide(color: Color(0xFF1B3A2D))),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Send a Barter Request?',
-                  style: TextStyle(fontSize: 13,
-                    color: Colors.white)),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF72),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                    minimumSize: Size.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: TextStyle(color: Color(0xFF6AAD7A)),
+                      border: InputBorder.none,
+                    ),
                   ),
-                  onPressed: () => setState(() => _barterAgreed = true),
-                  child: const Text('Send Request',
-                    style: TextStyle(fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1B3A2D))),
+                ),
+                GestureDetector(
+                  onTap: () async {
+                    if (_messageController.text.isNotEmpty) {
+                      final text = _messageController.text.trim();
+
+                      if (text == "") {
+                        return;
+                      }
+
+                      _messageController.clear();
+
+                      await FirebaseFirestore.instance
+                          .collection('messages')
+                          .add({
+                            'chat_id': widget.chatId,
+                            'sender_id': AuthService.uid,
+                            'text': text,
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+
+                      await FirebaseFirestore.instance
+                          .collection('chats')
+                          .doc(widget.chatId)
+                          .update({'last_message': text});
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4CAF72),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.send,
+                      color: Color(0xFF1B3A2D),
+                      size: 18,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-        if (_barterAgreed)
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D5A3D),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle,
-                  color: Color(0xFF4CAF72), size: 18),
-                SizedBox(width: 8),
-                Text('Barter Agreed! 🎉',
-                  style: TextStyle(fontSize: 13,
-                    color: Color(0xFF4CAF72),
-                    fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _messages.length,
-            itemBuilder: (_, i) => _buildMessage(_messages[i]),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: const BoxDecoration(
-            color: Color(0xFF2D5A3D),
-            border: Border(top: BorderSide(color: Color(0xFF1B3A2D))),
-          ),
-          child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: 'Type a message...',
-                  hintStyle: TextStyle(color: Color(0xFF6AAD7A)),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                if (_messageController.text.isNotEmpty) {
-                  setState(() {
-                    _messages.add({
-                      'text': _messageController.text,
-                      'isMe': true,
-                    });
-                    _messageController.clear();
-                  });
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF4CAF72),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.send,
-                  color: Color(0xFF1B3A2D), size: 18),
-              ),
-            ),
-          ]),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 
   Widget _buildMessage(Map<String, dynamic> msg) {
     return Align(
-      alignment: msg['isMe']
-        ? Alignment.centerRight
-        : Alignment.centerLeft,
+      alignment: msg['isMe'] ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: const BoxConstraints(maxWidth: 250),
         decoration: BoxDecoration(
           color: msg['isMe']
-            ? const Color(0xFF4CAF72)
-            : const Color(0xFF2D5A3D),
+              ? const Color(0xFF4CAF72)
+              : const Color(0xFF2D5A3D),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Text(msg['text'],
+        child: Text(
+          msg['text'],
           style: TextStyle(
             fontSize: 13,
-            color: msg['isMe']
-              ? const Color(0xFF1B3A2D)
-              : Colors.white,
-          )),
+            color: msg['isMe'] ? const Color(0xFF1B3A2D) : Colors.white,
+          ),
+        ),
       ),
     );
   }

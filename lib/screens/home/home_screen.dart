@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:skillbarter/models/services/auth_services.dart';
+import 'package:skillbarter/models/services/common_helper.dart';
 import 'package:skillbarter/models/services/post_service.dart';
 import '../post/post_screen.dart';
 // import '../browse/browse_screen.dart';
@@ -170,16 +171,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  String getInitials(String name) {
-    List<String> parts = name.trim().split(' ');
-
-    if (parts.length == 1) {
-      return parts[0][0].toUpperCase();
-    }
-
-    return parts[0][0].toUpperCase() + parts[1][0].toUpperCase();
-  }
-
   Widget _buildSkillCard(Map<String, dynamic> post, String postId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -197,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 radius: 18,
                 backgroundColor: const Color(0xFF4CAF72),
                 child: Text(
-                  getInitials(post['name']),
+                  CommonHelper.getInitials(post['name']),
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -298,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   await FirebaseFirestore.instance.collection('chats').add({
                     'post_id': postId,
                     'request_id': requestRef.id,
+                    'post_title': post['title'],
                     'participants': [ownerId, requesterId],
                     'last_message': '',
                     'createdAt': FieldValue.serverTimestamp(),
