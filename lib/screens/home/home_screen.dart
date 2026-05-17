@@ -256,60 +256,79 @@ class _HomeScreenState extends State<HomeScreen> {
                 'Wants: ${post['wants']}',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF6AAD7A)),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF72),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  minimumSize: Size.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () async {
-                  final ownerId = post['owner_id'];
-
-                  final requesterId = AuthService.uid;
-
-                  final requestRef = await FirebaseFirestore.instance
-                      .collection('post_requests')
-                      .add({
-                        'post_id': postId,
-                        'post_title': post['title'],
-                        'post_name': post['name'],
-                        'post_owner_id': ownerId,
-                        'post_owner_status': 'pending',
-                        'requester_id': requesterId,
-                        'requester_status': 'pending',
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
-
-                  await FirebaseFirestore.instance.collection('chats').add({
-                    'post_id': postId,
-                    'request_id': requestRef.id,
-                    'post_title': post['title'],
-                    'participants': [ownerId, requesterId],
-                    'last_message': '',
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
-                  if (!mounted) {
-                    return;
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('post_requests')
+                    .where('post_id', isEqualTo: postId)
+                    .where('requester_id', isEqualTo: AuthService.uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const SizedBox();
                   }
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ChatScreen()),
+
+                  final alreadyRequested = snapshot.data!.docs.isNotEmpty;
+
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF72),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () async {
+                      if (!alreadyRequested) {
+                        final ownerId = post['owner_id'];
+                        final requesterId = AuthService.uid;
+
+                        final requestRef = await FirebaseFirestore.instance
+                            .collection('post_requests')
+                            .add({
+                              'post_id': postId,
+                              'post_title': post['title'],
+                              'post_name': post['name'],
+                              'post_owner_id': ownerId,
+                              'post_owner_status': 'pending',
+                              'requester_id': requesterId,
+                              'requester_status': 'pending',
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+
+                        await FirebaseFirestore.instance
+                            .collection('chats')
+                            .add({
+                              'post_id': postId,
+                              'request_id': requestRef.id,
+                              'post_title': post['title'],
+                              'participants': [ownerId, requesterId],
+                              'last_message': '',
+                              'createdAt': FieldValue.serverTimestamp(),
+                            });
+
+                        if (!context.mounted) {
+                          return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ChatScreen()),
+                        );
+                      }
+                    },
+                    child: Text(
+                      (alreadyRequested) ? 'Requested' : 'Request',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B3A2D),
+                      ),
+                    ),
                   );
                 },
-                child: const Text(
-                  'Request',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1B3A2D),
-                  ),
-                ),
               ),
             ],
           ),
