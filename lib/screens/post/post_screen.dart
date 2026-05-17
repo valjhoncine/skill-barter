@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:skillbarter/models/services/auth_services.dart';
+import 'package:skillbarter/models/services/post_service.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -16,6 +16,7 @@ class _PostScreenState extends State<PostScreen> {
   final _wantsController = TextEditingController();
   String _selectedCategory = 'Design';
   bool isLoading = false;
+  final PostService _postService = PostService();
 
   void setLoading(bool s) {
     setState(() {
@@ -54,24 +55,12 @@ class _PostScreenState extends State<PostScreen> {
     }
     setLoading(true);
     try {
-      final user = AuthService.user;
-
-      if (user == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('User not logged in')));
-        return;
-      }
-
-      await FirebaseFirestore.instance.collection('posts').add({
-        'owner_id': user.uid,
-        'title': title,
-        'description': description,
-        'category': category,
-        'wants': wants,
-        'status': 'open',
-        'createdAt': Timestamp.now(),
-      });
+      await _postService.createPost(
+        title: title,
+        description: description,
+        wants: wants,
+        category: category,
+      );
 
       if (!mounted) {
         return;
