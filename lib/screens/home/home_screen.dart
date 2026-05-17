@@ -160,8 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
           itemCount: posts.length,
           itemBuilder: (_, i) {
             final post = posts[i].data() as Map<String, dynamic>;
+            final doc = posts[i];
+            final docId = doc.id;
 
-            return _buildSkillCard(post);
+            return _buildSkillCard(post, docId);
           },
         );
       },
@@ -178,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return parts[0][0].toUpperCase() + parts[1][0].toUpperCase();
   }
 
-  Widget _buildSkillCard(Map<String, dynamic> post) {
+  Widget _buildSkillCard(Map<String, dynamic> post, String postId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -276,7 +278,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 onPressed: () async {
-                  final postId = post['id'];
                   final ownerId = post['owner_id'];
 
                   final requesterId = AuthService.uid;
