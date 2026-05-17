@@ -1,5 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -13,6 +14,68 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool isLoading = false;
+
+  void setLoading(bool s) {
+    setState(() {
+      isLoading = s;
+    });
+  }
+
+  Future<void> registerUser() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (name == "" || email == "" || password == "" || confirmPassword == "") {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please make sure to fill all fields.')),
+      );
+      return;
+    }
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+      return;
+    }
+    setLoading(true);
+    try {
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      await userCredential.user!.updateDisplayName(name);
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+            'uid': userCredential.user!.uid,
+            'name': name,
+            'email': email,
+            'title': '',
+            'description': '',
+            'skills': [],
+            'createdAt': Timestamp.now(),
+          });
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account created successfully')),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Registration failed')),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,22 +88,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              const Text('Create an Account',
-                style: TextStyle(fontSize: 26,
-                  fontWeight: FontWeight.bold, color: Colors.white),
+              const Text(
+                'Create an Account',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 6),
-              const Text('Join the Skill Community',
+              const Text(
+                'Join the Skill Community',
                 style: TextStyle(fontSize: 13, color: Color(0xFFA3C4A8)),
               ),
               const SizedBox(height: 32),
-              _buildInputField('Full Name', 'Juan dela Cruz', _nameController, false),
+              _buildInputField(
+                'Full Name',
+                'Juan dela Cruz',
+                _nameController,
+                false,
+              ),
               const SizedBox(height: 14),
-              _buildInputField('Email', 'you@email.com', _emailController, false),
+              _buildInputField(
+                'Email',
+                'you@email.com',
+                _emailController,
+                false,
+              ),
               const SizedBox(height: 14),
-              _buildInputField('Password', '••••••••', _passwordController, true),
+              _buildInputField(
+                'Password',
+                '••••••••',
+                _passwordController,
+                true,
+              ),
               const SizedBox(height: 14),
-              _buildInputField('Confirm Password', '••••••••', _confirmPasswordController, true),
+              _buildInputField(
+                'Confirm Password',
+                '••••••••',
+                _confirmPasswordController,
+                true,
+              ),
               const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
@@ -52,24 +140,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {},
-                  child: const Text('Create Account',
-                    style: TextStyle(fontSize: 16,
-                      fontWeight: FontWeight.bold, color: Color(0xFF1B3A2D)),
-                  ),
+                  onPressed: () {
+                    registerUser();
+                  },
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Create Account',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1B3A2D),
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text("Already have an account? ",
-                  style: TextStyle(fontSize: 13, color: Color(0xFF6AAD7A))),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Text('Login',
-                    style: TextStyle(fontSize: 13,
-                      fontWeight: FontWeight.bold, color: Color(0xFF4CAF72))),
-                ),
-              ]),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Already have an account? ",
+                    style: TextStyle(fontSize: 13, color: Color(0xFF6AAD7A)),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Text(
+                      'Login',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4CAF72),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -77,8 +183,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildInputField(String label, String hint,
-      TextEditingController controller, bool isPassword) {
+  Widget _buildInputField(
+    String label,
+    String hint,
+    TextEditingController controller,
+    bool isPassword,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2D5A3D),
