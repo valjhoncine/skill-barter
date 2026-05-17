@@ -92,6 +92,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     'unread': 0,
                     'status': 'Active',
                     'title': chat['post_title'] ?? '',
+                    'requestId': chat['request_id'],
                   };
 
                   return _buildConversationCard(convo, chatId);
@@ -111,6 +112,7 @@ class _ChatScreenState extends State<ChatScreen> {
         MaterialPageRoute(
           builder: (_) => ChatDetailScreen(
             chatId: chatId,
+            requestId: convo['requestId'],
             name: convo['name'],
             initials: convo['initials'],
             status: convo['status'],
@@ -234,6 +236,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;
+  final String requestId;
   final String name;
   final String initials;
   final String status;
@@ -241,6 +244,7 @@ class ChatDetailScreen extends StatefulWidget {
   const ChatDetailScreen({
     super.key,
     required this.chatId,
+    required this.requestId,
     required this.name,
     required this.initials,
     required this.status,
@@ -252,7 +256,6 @@ class ChatDetailScreen extends StatefulWidget {
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _messageController = TextEditingController();
-  bool _barterAgreed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -305,70 +308,128 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ),
       body: Column(
         children: [
-          if (!_barterAgreed)
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D5A3D),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Send a Barter Request?',
-                    style: TextStyle(fontSize: 13, color: Colors.white),
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('post_requests')
+                .doc(widget.requestId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox();
+              }
+
+              final request = snapshot.data!.data() as Map<String, dynamic>;
+
+              final requesterStatus = request['requester_status'];
+
+              final ownerStatus = request['post_owner_status'];
+
+              final barterAgreed =
+                  requesterStatus == 'accepted' && ownerStatus == 'accepted';
+
+              if (barterAgreed) {
+                return Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D5A3D),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF72),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        color: Color(0xFF4CAF72),
+                        size: 18,
                       ),
-                      minimumSize: Size.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      SizedBox(width: 8),
+                      Text(
+                        'Barter Agreed! 🎉',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF4CAF72),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final isRequester = request['requester_id'] == AuthService.uid;
+
+              final requesterAccepted = (requesterStatus == 'accepted');
+              final ownerAccepted = (ownerStatus == 'accepted');
+
+              String titleRequestMessage = "Send barter request?";
+              String buttonText = 'Send';
+              bool canPress = true;
+
+              if (isRequester && requesterAccepted && !ownerAccepted) {
+                titleRequestMessage = "Waiting for approval";
+                buttonText = 'Request Sent';
+                canPress = false;
+              }
+
+              if (!isRequester && !ownerAccepted) {
+                titleRequestMessage = "Accept barter request?";
+                buttonText = 'Accept';
+              }
+
+              return Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D5A3D),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      titleRequestMessage,
+                      style: const TextStyle(fontSize: 13, color: Colors.white),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF72),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        minimumSize: Size.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: canPress
+                          ? () async {
+                              await FirebaseFirestore.instance
+                                  .collection('post_requests')
+                                  .doc(widget.requestId)
+                                  .update({
+                                    isRequester
+                                            ? 'requester_status'
+                                            : 'post_owner_status':
+                                        'accepted',
+                                  });
+                            }
+                          : null,
+                      child: Text(
+                        buttonText,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B3A2D),
+                        ),
                       ),
                     ),
-                    onPressed: () => setState(() => _barterAgreed = true),
-                    child: const Text(
-                      'Send Request',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B3A2D),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (_barterAgreed)
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D5A3D),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle, color: Color(0xFF4CAF72), size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Barter Agreed! 🎉',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF4CAF72),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                  ],
+                ),
+              );
+            },
+          ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
