@@ -137,10 +137,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 13, color: Color(0xFF6AAD7A))),
+          Text(
+            'Full Stack Software Engineer | Backend Developer | C# | .Net Core | DevOps',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6AAD7A)),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Text(
-            '$location 📍',
+            'Batangas, Calabarzon 📍',
             style: TextStyle(fontSize: 12, color: Color(0xFFA3C4A8)),
           ),
           const SizedBox(height: 16),
@@ -151,7 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              description,
+              'Passionate about building apps and exchanging skills with the community. '
+              'Let\'s grow together! 🌱',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: Color(0xFFA3C4A8)),
             ),
@@ -193,7 +198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }
 
               final docs = snapshot.data!.docs;
-              
+
               final exchangeCount = docs.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
 
