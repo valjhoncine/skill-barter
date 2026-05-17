@@ -37,8 +37,14 @@ class PostService {
   }
 
   Stream<QuerySnapshot> getPosts() {
-    return posts
-        .orderBy('createdAt', descending: true)
+    return posts.orderBy('createdAt', descending: true).snapshots();
+  }
+
+  Stream<QuerySnapshot> getAcceptedExchanges() {
+    return FirebaseFirestore.instance
+        .collection('post_requests')
+        .where('post_owner_status', isEqualTo: 'accepted')
+        .where('requester_status', isEqualTo: 'accepted')
         .snapshots();
   }
 }

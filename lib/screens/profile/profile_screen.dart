@@ -185,7 +185,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
           _buildDivider(),
-          _buildStat('4', 'Exchanges'),
+          StreamBuilder<QuerySnapshot>(
+            stream: _postService.getAcceptedExchanges(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return _buildStat('0', 'Exchanges');
+              }
+
+              final docs = snapshot.data!.docs;
+              
+              final exchangeCount = docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+
+                return data['post_owner_id'] == AuthService.uid ||
+                    data['requester_id'] == AuthService.uid;
+              }).length;
+
+              return _buildStat(exchangeCount.toString(), 'Exchanges');
+            },
+          ),
           _buildDivider(),
           _buildStat('⭐ 4.8', 'Rating'),
         ],
