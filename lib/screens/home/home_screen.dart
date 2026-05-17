@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:skillbarter/models/services/auth_services.dart';
@@ -18,6 +20,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final PostService _postService = PostService();
   int _currentIndex = 0;
+
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: const Color(0xFF2D5A3D),
           borderRadius: BorderRadius.circular(12),
@@ -89,9 +95,27 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const Icon(Icons.search, color: Color(0xFF6AAD7A), size: 20),
             const SizedBox(width: 10),
-            const Text(
-              'Search skills...',
-              style: TextStyle(color: Color(0xFF6AAD7A), fontSize: 14),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search category...',
+                  hintStyle: TextStyle(color: Color(0xFF6AAD7A), fontSize: 14),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  if (_debounce?.isActive ?? false) {
+                    _debounce!.cancel();
+                  }
+
+                  _debounce = Timer(const Duration(milliseconds: 500), () {
+                    setState(() {
+                      _searchQuery = value.trim().toLowerCase();
+                    });
+                  });
+                },
+              ),
             ),
           ],
         ),
@@ -147,7 +171,17 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final posts = snapshot.data!.docs.where((doc) {
-          return doc['owner_id'] != AuthService.uid && doc['status'] == 'open';
+          final data = doc.data() as Map<String, dynamic>;
+
+          final isNotOwner = data['owner_id'] != AuthService.uid;
+          final isOpen = data['status'] == 'open';
+
+          final category = (data['category'] ?? '').toString().toLowerCase();
+
+          final matchesSearch =
+              _searchQuery.isEmpty || category.contains(_searchQuery);
+
+          return isNotOwner && isOpen && matchesSearch;
         }).toList();
 
         if (posts.isEmpty) {
